@@ -302,6 +302,17 @@ _${posts.explanation}_
       return;
     }
 
+    // ✅ DEBUG: Logar draft completo quando acionado
+    console.log('[Telegram Bot] Draft carregado do banco:');
+    console.log(JSON.stringify({
+      id: draft.id,
+      hasImagePath: !!draft.imagePath,
+      imagePath: draft.imagePath ? draft.imagePath.substring(0, 100) : null,
+      hasTwitter: !!draft.twitter,
+      hasLinkedin: !!draft.linkedin,
+      status: draft.status
+    }, null, 2));
+
     if (action === 'discard') {
       db.updateDraft(draftId, { status: { x: 'SKIPPED', linkedin: 'SKIPPED' } });
       db.setSession(chatId, { state: 'IDLE', data: {} });

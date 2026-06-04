@@ -94,18 +94,27 @@ export async function shareOnLinkedin(text, imagePath = null) {
     let mediaAssetUrn = null;
 
     // Se houver uma imagem, executa o fluxo de upload
-    if (imagePath && fs.existsSync(imagePath)) {
-      try {
-        // ✅ Validar caminho da imagem
-        const validatedPath = validateImagePath(imagePath);
-        safeLog('LinkedIn', 'info', `Fazendo upload da imagem...`);
-        const { uploadUrl, assetUrn } = await registerImageUpload(token, author);
-        await uploadImageBinary(token, uploadUrl, validatedPath);
-        mediaAssetUrn = assetUrn;
-        safeLog('LinkedIn', 'info', `Upload concluído!`);
-      } catch (uploadError) {
-        safeLog('LinkedIn', 'warn', `Falha no upload da imagem, publicando post apenas com texto. Erro: ${maskSensitiveData(uploadError.message)}`);
+    if (imagePath) {
+      safeLog('LinkedIn', 'info', `Verificando imagem: ${imagePath}`);
+      safeLog('LinkedIn', 'info', `Arquivo existe? ${fs.existsSync(imagePath)}`);
+
+      if (fs.existsSync(imagePath)) {
+        try {
+          // ✅ Validar caminho da imagem
+          const validatedPath = validateImagePath(imagePath);
+          safeLog('LinkedIn', 'info', `Fazendo upload da imagem...`);
+          const { uploadUrl, assetUrn } = await registerImageUpload(token, author);
+          await uploadImageBinary(token, uploadUrl, validatedPath);
+          mediaAssetUrn = assetUrn;
+          safeLog('LinkedIn', 'info', `Upload concluído! Asset URN: ${assetUrn}`);
+        } catch (uploadError) {
+          safeLog('LinkedIn', 'warn', `Falha no upload da imagem, publicando post apenas com texto. Erro: ${maskSensitiveData(uploadError.message)}`);
+        }
+      } else {
+        safeLog('LinkedIn', 'warn', `Arquivo de imagem não encontrado: ${imagePath}. Publicando post apenas com texto.`);
       }
+    } else {
+      safeLog('LinkedIn', 'info', 'Nenhuma imagem fornecida para upload.');
     }
 
   // Montar payload final do ugcPosts

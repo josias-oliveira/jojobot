@@ -24,14 +24,24 @@ export function shareOnTwitter(text, imagePath = null) {
       const args = ['--text', validatedText];
 
       // ✅ Validar caminho da imagem se fornecido
-      if (imagePath && fs.existsSync(imagePath)) {
-        try {
-          const validatedPath = validateImagePath(imagePath);
-          args.push('--image', validatedPath);
-        } catch (pathError) {
-          safeLog('Twitter', 'warn', `Imagem inválida: ${pathError.message}`);
-          // Continuar sem imagem ao invés de falhar
+      if (imagePath) {
+        safeLog('Twitter', 'info', `Verificando imagem: ${imagePath}`);
+        safeLog('Twitter', 'info', `Arquivo existe? ${fs.existsSync(imagePath)}`);
+
+        if (fs.existsSync(imagePath)) {
+          try {
+            const validatedPath = validateImagePath(imagePath);
+            args.push('--image', validatedPath);
+            safeLog('Twitter', 'info', `Imagem adicionada aos argumentos: ${validatedPath}`);
+          } catch (pathError) {
+            safeLog('Twitter', 'warn', `Imagem inválida: ${pathError.message}`);
+            // Continuar sem imagem ao invés de falhar
+          }
+        } else {
+          safeLog('Twitter', 'warn', `Arquivo de imagem não encontrado: ${imagePath}. Publicando tweet apenas com texto.`);
         }
+      } else {
+        safeLog('Twitter', 'info', 'Nenhuma imagem fornecida.');
       }
 
       safeLog('Twitter', 'info', `Spawning Python script to publish tweet...`);
