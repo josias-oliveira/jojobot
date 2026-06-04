@@ -21,8 +21,7 @@ async function registerImageUpload(token, personUrn) {
   const payload = {
     registerUploadRequest: {
       recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-      owner: personUrn,
-      supportedUploadMechanisms: ['SYNCHRONOUS_UPLOAD']
+      owner: personUrn
     }
   };
 
