@@ -67,6 +67,9 @@ export function shareOnTwitter(text, imagePath = null) {
     if (pyProcess.listenerCount('error') > 0) {
       handleProcessEvents(pyProcess, resolve, reject);
     }
+    } catch (error) {
+      reject(error);
+    }
   });
 }
 
