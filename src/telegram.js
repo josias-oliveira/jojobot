@@ -6,6 +6,7 @@ import { generateUgcImage } from './dalle.js';
 import { shareOnTwitter } from './twitter.js';
 import { shareOnLinkedin } from './linkedin.js';
 import { maskSensitiveData, validateTweetText, validateLinkedinText, safeLog } from './security.js';
+import { extractUrls } from './url-handler.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -107,13 +108,16 @@ Você aprova e publica diretamente nas redes sociais em um clique usando os bot�
       }
 
       try {
+        // ✅ Extrair URLs da legenda
+        const { cleanText, urls } = extractUrls(caption);
+
         db.setSession(chatId, { state: 'GENERATING', data: { rawInput: caption } });
-        
+
         const statusMsg = await bot.sendMessage(chatId, '📥 *Infográfico recebido!* Baixando arquivo e gerando textos otimizados...', { parse_mode: 'Markdown' });
 
         // Obter a foto de maior qualidade
         const fileId = photo[photo.length - 1].file_id;
-        
+
         const tempDir = path.resolve('temp');
         if (!fs.existsSync(tempDir)) {
           fs.mkdirSync(tempDir, { recursive: true });
@@ -123,10 +127,10 @@ Você aprova e publica diretamente nas redes sociais em um clique usando os bot�
         const localImagePath = await bot.downloadFile(fileId, tempDir);
         console.log(`[Telegram Bot] Infográfico do usuário baixado em: ${localImagePath}`);
 
-        // Gerar os textos com Gemini com base na legenda fornecida
+        // Gerar os textos com Gemini com base na legenda fornecida (passando URLs se existirem)
         let posts = null;
         try {
-          posts = await generateSocialPosts(caption);
+          posts = await generateSocialPosts(cleanText, urls);
         } catch (err) {
           console.error('[Telegram Bot] Erro na geração de texto:', err);
           await bot.editMessageText(`❌ *Erro na geração de texto:* ${err.message}\n\nVerifique se a chave do Gemini está correta.`, {
@@ -186,14 +190,17 @@ _${posts.explanation}_
     // --- CASO 2: O usuário enviou apenas Texto (fluxo com imagem gerada por IA) ---
     if (text) {
       try {
+        // ✅ Extrair URLs do texto
+        const { cleanText, urls } = extractUrls(text);
+
         db.setSession(chatId, { state: 'GENERATING', data: { rawInput: text } });
-        
+
         const statusMsg = await bot.sendMessage(chatId, '🤖 *Processando sua ideia...* Estilizando a redação de copy para o X e o LinkedIn...', { parse_mode: 'Markdown' });
 
-        // Gerar textos
+        // Gerar textos (passando URLs se existirem)
         let posts = null;
         try {
-          posts = await generateSocialPosts(text);
+          posts = await generateSocialPosts(cleanText, urls);
         } catch (err) {
           console.error('[Telegram Bot] Erro na geração de texto:', err);
           await bot.editMessageText(`❌ *Erro na geração de texto:* ${err.message}`, {

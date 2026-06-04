@@ -47,21 +47,30 @@ Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua re
 /**
  * Gera os rascunhos de posts usando o Gemini (preferencial) ou OpenAI (fallback)
  * @param {string} rawInput Ideia bruta fornecida pelo usuário
+ * @param {string[]} urls Array de URLs opcionais para incluir no final
  * @returns {Promise<{twitter: string, linkedin: string, explanation: string}>}
  */
-export async function generateSocialPosts(rawInput) {
+export async function generateSocialPosts(rawInput, urls = []) {
   console.log(`[LLM] Iniciando geração para o input: "${rawInput.substring(0, 50)}..."`);
+  if (urls.length > 0) {
+    console.log(`[LLM] URLs detectadas: ${urls.join(', ')}`);
+  }
+
+  // Preparar instrução sobre URLs
+  const urlInstruction = urls.length > 0
+    ? `\n\nIMPORTANTE: No final de AMBOS os posts (Twitter e LinkedIn), adicione um quebra de linha e então as URLs fornecidas:\n${urls.map(url => `- ${url}`).join('\n')}`
+    : '';
 
   // 1. Tentar usar o Gemini
   if (genAI) {
     try {
-      const model = genAI.getGenerativeModel({ 
+      const model = genAI.getGenerativeModel({
         model: 'gemini-flash-latest',
         generationConfig: { responseMimeType: "application/json" }
       });
 
       const prompt = `
-      ${SYSTEM_PROMPT}
+      ${SYSTEM_PROMPT}${urlInstruction}
 
       Ideia/Input do Usuário:
       "${rawInput}"
@@ -80,7 +89,7 @@ export async function generateSocialPosts(rawInput) {
     try {
       const prompt = `
       Ideia/Input do Usuário:
-      "${rawInput}"
+      "${rawInput}"${urlInstruction}
       `;
 
       const response = await openai.chat.completions.create({
