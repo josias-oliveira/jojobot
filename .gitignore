@@ -4,6 +4,9 @@ db.json
 *.log
 .DS_Store
 temp/
+backups/
+logs/
 *.jpg
 *.png
 *.jpeg
+.DS_Store
