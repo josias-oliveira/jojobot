@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import { validateTweetText, validateImagePath, maskSensitiveData, safeLog } from './security.js';
 
 /**
  * Executa o script Python para publicar no Twitter/X
@@ -10,18 +11,30 @@ import fs from 'fs';
  */
 export function shareOnTwitter(text, imagePath = null) {
   return new Promise((resolve, reject) => {
-    const scriptPath = path.resolve('scripts/publish_x.py');
+    try {
+      // ✅ Validar input ANTES de passar ao Python
+      const validatedText = validateTweetText(text);
 
-    if (!fs.existsSync(scriptPath)) {
-      return reject(new Error(`Script Python não encontrado em: ${scriptPath}`));
-    }
+      const scriptPath = path.resolve('scripts/publish_x.py');
 
-    const args = ['--text', text];
-    if (imagePath && fs.existsSync(imagePath)) {
-      args.push('--image', imagePath);
-    }
+      if (!fs.existsSync(scriptPath)) {
+        return reject(new Error(`Script Python não encontrado em: ${scriptPath}`));
+      }
 
-    console.log(`[Twitter Module] Spawning Python script to publish tweet...`);
+      const args = ['--text', validatedText];
+
+      // ✅ Validar caminho da imagem se fornecido
+      if (imagePath && fs.existsSync(imagePath)) {
+        try {
+          const validatedPath = validateImagePath(imagePath);
+          args.push('--image', validatedPath);
+        } catch (pathError) {
+          safeLog('Twitter', 'warn', `Imagem inválida: ${pathError.message}`);
+          // Continuar sem imagem ao invés de falhar
+        }
+      }
+
+      safeLog('Twitter', 'info', `Spawning Python script to publish tweet...`);
     
     // Tentar localizar e usar o ambiente virtual venv/ local
     let pythonCmd = 'python3';
@@ -76,10 +89,11 @@ function handleProcessEvents(processInstance, resolve, reject) {
   });
 
   processInstance.on('close', (code) => {
-    console.log(`[Twitter Module] Processo Python encerrado com código ${code}`);
-    
+    safeLog('Twitter', 'info', `Processo Python encerrado com código ${code}`);
+
     if (stderrData) {
-      console.error(`[Twitter Module] Stderr: ${stderrData}`);
+      // ✅ Mascarar dados sensíveis antes de logar
+      safeLog('Twitter', 'warn', `Stderr: ${maskSensitiveData(stderrData)}`);
     }
 
     try {
@@ -91,11 +105,11 @@ function handleProcessEvents(processInstance, resolve, reject) {
           reject(new Error(result.error || 'Erro desconhecido retornado pelo script Python.'));
         }
       } else {
-        reject(new Error(`O script Python não retornou nenhuma saída stdout. Stderr: ${stderrData}`));
+        reject(new Error(`O script Python não retornou nenhuma saída stdout. Stderr: ${maskSensitiveData(stderrData)}`));
       }
     } catch (parseError) {
-      console.error(`[Twitter Module] Falha ao parsear saída JSON: ${stdoutData}`);
-      reject(new Error(`Saída inválida do script Python: ${stdoutData || stderrData}`));
+      safeLog('Twitter', 'error', `Falha ao parsear saída JSON: ${maskSensitiveData(stdoutData)}`);
+      reject(new Error(`Saída inválida do script Python.`));
     }
   });
 }

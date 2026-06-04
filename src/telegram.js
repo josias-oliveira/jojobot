@@ -5,10 +5,38 @@ import { generateSocialPosts } from './llm.js';
 import { generateUgcImage } from './dalle.js';
 import { shareOnTwitter } from './twitter.js';
 import { shareOnLinkedin } from './linkedin.js';
+import { maskSensitiveData, validateTweetText, validateLinkedinText, safeLog } from './security.js';
 import fs from 'fs';
 import path from 'path';
 
 let bot = null;
+
+// ✅ Rate limiting: máximo 5 requisições por minuto por usuário
+const RATE_LIMITS = new Map();
+const MAX_REQUESTS_PER_MINUTE = 5;
+
+/**
+ * Verificar e aplicar rate limit por usuário
+ * @param {number} chatId ID do chat do Telegram
+ * @returns {boolean} true se permitido, false se excedido
+ */
+function checkRateLimit(chatId) {
+  const now = Date.now();
+  let limit = RATE_LIMITS.get(chatId) || [];
+
+  // ✅ Limpar requisições antigas (> 60 segundos)
+  limit = limit.filter(timestamp => now - timestamp < 60000);
+
+  // ✅ Verificar se excedeu limite
+  if (limit.length >= MAX_REQUESTS_PER_MINUTE) {
+    return false;
+  }
+
+  // ✅ Registrar nova requisição
+  limit.push(now);
+  RATE_LIMITS.set(chatId, limit);
+  return true;
+}
 
 export function initTelegramBot() {
   if (!config.telegramBotToken) {
@@ -52,6 +80,16 @@ Você aprova e publica diretamente nas redes sociais em um clique usando os bot�
 
     // Ignorar comandos de texto
     if (text && text.startsWith('/')) return;
+
+    // ✅ Verificar rate limit ANTES de processar
+    if (!checkRateLimit(chatId)) {
+      safeLog('Telegram', 'warn', `Rate limit atingido para chat ${chatId}`);
+      bot.sendMessage(chatId,
+        '⏳ *Limite atingido*\nVocê pode enviar no máximo 5 mensagens por minuto.\nAguarde 1 minuto e tente novamente.',
+        { parse_mode: 'Markdown' }
+      );
+      return;
+    }
 
     const session = db.getSession(chatId);
 

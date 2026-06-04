@@ -12,6 +12,7 @@ const initialData = {
 class LocalDatabase {
   constructor() {
     this.data = this.load();
+    this.writing = false; // ✅ Flag para prevenir race conditions
   }
 
   load() {
@@ -28,10 +29,40 @@ class LocalDatabase {
   }
 
   save(data = this.data) {
+    // ✅ Aguardar se já está escrevendo (simula lock simples)
+    const waitStart = Date.now();
+    const MAX_WAIT_TIME = 5000; // 5 segundos de timeout
+
+    while (this.writing && Date.now() - waitStart < MAX_WAIT_TIME) {
+      // Spin lock simples - aguarda liberação
+    }
+
+    if (this.writing) {
+      console.error('[DB] Timeout aguardando escrita anterior. Abortando save.');
+      return;
+    }
+
+    this.writing = true;
     try {
-      fs.writeFileSync(DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
+      const tempPath = DB_PATH + '.tmp';
+      // ✅ Escrever em arquivo temporário primeiro
+      fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+      // ✅ Depois renomear atomicamente (operação atomic no filesystem)
+      fs.renameSync(tempPath, DB_PATH);
+      console.log('[DB] Dados salvos com sucesso');
     } catch (error) {
       console.error('Erro ao persistir o banco de dados:', error);
+      // Tentar limpar arquivo temporário se houver erro
+      try {
+        const tempPath = DB_PATH + '.tmp';
+        if (fs.existsSync(tempPath)) {
+          fs.unlinkSync(tempPath);
+        }
+      } catch (e) {
+        // Ignorar erro de limpeza
+      }
+    } finally {
+      this.writing = false; // ✅ Liberar lock
     }
   }
 

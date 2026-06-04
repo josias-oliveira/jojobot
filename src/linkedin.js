@@ -2,6 +2,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import config from './config.js';
+import { maskSensitiveData, validateLinkedinText, validateImagePath, safeLog } from './security.js';
 
 /**
  * Registra o upload de uma imagem na API do LinkedIn
@@ -25,13 +26,19 @@ async function registerImageUpload(token, personUrn) {
     }
   };
 
-  const response = await axios.post(url, payload, { headers });
-  
-  const uploadMechanism = response.data.value.uploadMechanism;
-  const uploadUrl = response.data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
-  const assetUrn = response.data.value.asset;
+  try {
+    const response = await axios.post(url, payload, { headers });
 
-  return { uploadUrl, assetUrn };
+    const uploadMechanism = response.data.value.uploadMechanism;
+    const uploadUrl = response.data.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+    const assetUrn = response.data.value.asset;
+
+    return { uploadUrl, assetUrn };
+  } catch (error) {
+    // ✅ Mascarar credenciais antes de logar
+    safeLog('LinkedIn', 'error', `Erro ao registrar upload: ${maskSensitiveData(JSON.stringify(error.response?.data || error.message))}`);
+    throw error;
+  }
 }
 
 /**
@@ -57,79 +64,85 @@ async function uploadImageBinary(token, uploadUrl, filePath) {
  * @returns {Promise<string>} O ID da postagem criada ou URN do post
  */
 export async function shareOnLinkedin(text, imagePath = null) {
-  const token = config.linkedin.accessToken;
-  const author = config.linkedin.memberUrn;
+  try {
+    // ✅ Validar input de texto ANTES de processar
+    const validatedText = validateLinkedinText(text);
 
-  if (!token || !author) {
-    throw new Error('Credenciais do LinkedIn não configuradas no .env (LINKEDIN_ACCESS_TOKEN / LINKEDIN_MEMBER_URN).');
-  }
+    const token = config.linkedin.accessToken;
+    const author = config.linkedin.memberUrn;
 
-  console.log('[LinkedIn] Iniciando processo de publicação...');
-
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json',
-    'X-Restli-Protocol-Version': '2.0.0'
-  };
-
-  let mediaAssetUrn = null;
-
-  // Se houver uma imagem, executa o fluxo de upload
-  if (imagePath && fs.existsSync(imagePath)) {
-    try {
-      console.log(`[LinkedIn] Fazendo upload da imagem: ${imagePath}`);
-      const { uploadUrl, assetUrn } = await registerImageUpload(token, author);
-      await uploadImageBinary(token, uploadUrl, imagePath);
-      mediaAssetUrn = assetUrn;
-      console.log(`[LinkedIn] Upload concluído! URN do Asset: ${mediaAssetUrn}`);
-    } catch (uploadError) {
-      console.error('[LinkedIn] Falha no upload da imagem, publicando post apenas com texto...', uploadError.response?.data || uploadError.message);
+    if (!token || !author) {
+      throw new Error('Credenciais do LinkedIn não configuradas no .env (LINKEDIN_ACCESS_TOKEN / LINKEDIN_MEMBER_URN).');
     }
-  }
+
+    safeLog('LinkedIn', 'info', 'Iniciando processo de publicação...');
+
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'X-Restli-Protocol-Version': '2.0.0'
+    };
+
+    let mediaAssetUrn = null;
+
+    // Se houver uma imagem, executa o fluxo de upload
+    if (imagePath && fs.existsSync(imagePath)) {
+      try {
+        // ✅ Validar caminho da imagem
+        const validatedPath = validateImagePath(imagePath);
+        safeLog('LinkedIn', 'info', `Fazendo upload da imagem...`);
+        const { uploadUrl, assetUrn } = await registerImageUpload(token, author);
+        await uploadImageBinary(token, uploadUrl, validatedPath);
+        mediaAssetUrn = assetUrn;
+        safeLog('LinkedIn', 'info', `Upload concluído!`);
+      } catch (uploadError) {
+        safeLog('LinkedIn', 'warn', `Falha no upload da imagem, publicando post apenas com texto. Erro: ${maskSensitiveData(uploadError.message)}`);
+      }
+    }
 
   // Montar payload final do ugcPosts
-  const url = 'https://api.linkedin.com/v2/ugcPosts';
-  
-  const shareContent = {
-    shareCommentary: {
-      text: text
-    },
-    shareMediaCategory: mediaAssetUrn ? 'IMAGE' : 'NONE'
-  };
+    const url = 'https://api.linkedin.com/v2/ugcPosts';
 
-  if (mediaAssetUrn) {
-    shareContent.media = [
-      {
-        status: 'READY',
-        description: {
-          text: 'Imagem gerada pelo JojoBot'
-        },
-        media: mediaAssetUrn,
-        title: {
-          text: 'JojoBot UGC Post'
+    const shareContent = {
+      shareCommentary: {
+        text: validatedText
+      },
+      shareMediaCategory: mediaAssetUrn ? 'IMAGE' : 'NONE'
+    };
+
+    if (mediaAssetUrn) {
+      shareContent.media = [
+        {
+          status: 'READY',
+          description: {
+            text: 'Imagem gerada pelo JojoBot'
+          },
+          media: mediaAssetUrn,
+          title: {
+            text: 'JojoBot UGC Post'
+          }
         }
-      }
-    ];
-  }
-
-  const payload = {
-    author: author,
-    lifecycleState: 'PUBLISHED',
-    specificContent: {
-      'com.linkedin.ugc.ShareContent': shareContent
-    },
-    visibility: {
-      'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+      ];
     }
-  };
 
-  try {
+    const payload = {
+      author: author,
+      lifecycleState: 'PUBLISHED',
+      specificContent: {
+        'com.linkedin.ugc.ShareContent': shareContent
+      },
+      visibility: {
+        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+      }
+    };
+
     const response = await axios.post(url, payload, { headers });
     const postId = response.data.id;
-    console.log(`[LinkedIn] Publicação criada com sucesso! ID: ${postId}`);
+    safeLog('LinkedIn', 'info', `Publicação criada com sucesso! ID: ${postId}`);
     return postId;
   } catch (error) {
-    console.error('[LinkedIn] Erro ao criar ugcPost:', error.response?.data || error.message);
-    throw new Error(`Erro na API do LinkedIn: ${JSON.stringify(error.response?.data || error.message)}`);
+    // ✅ Mascarar credenciais antes de logar
+    safeLog('LinkedIn', 'error', `Erro ao criar ugcPost: ${maskSensitiveData(JSON.stringify(error.response?.data || error.message))}`);
+    throw new Error(`Erro na API do LinkedIn. Verifique as configurações.`);
   }
 }
