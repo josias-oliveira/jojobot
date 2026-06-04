@@ -48,13 +48,21 @@ async function registerImageUpload(token, personUrn) {
  * @param {string} filePath Caminho local do arquivo
  */
 async function uploadImageBinary(token, uploadUrl, filePath) {
-  const fileBuffer = fs.readFileSync(filePath);
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/octet-stream'
-  };
+  try {
+    const fileBuffer = fs.readFileSync(filePath);
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/octet-stream',
+      'X-Restli-Protocol-Version': '2.0.0' // ✅ Adicionar header que LinkedIn exige
+    };
 
-  await axios.put(uploadUrl, fileBuffer, { headers });
+    const response = await axios.put(uploadUrl, fileBuffer, { headers });
+    safeLog('LinkedIn', 'info', 'Upload binário completado com sucesso');
+    return response;
+  } catch (error) {
+    safeLog('LinkedIn', 'error', `Erro no upload binário: ${maskSensitiveData(JSON.stringify(error.response?.data || error.message))}`);
+    throw error;
+  }
 }
 
 /**
