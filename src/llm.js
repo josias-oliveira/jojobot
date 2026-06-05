@@ -1,18 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import OpenAI from 'openai';
+import axios from 'axios';
 import config from './config.js';
-
-// Inicializar cliente do Gemini se a chave existir
-let genAI = null;
-if (config.geminiApiKey) {
-  genAI = new GoogleGenerativeAI(config.geminiApiKey);
-}
-
-// Inicializar cliente da OpenAI se a chave existir
-let openai = null;
-if (config.openaiApiKey) {
-  openai = new OpenAI({ apiKey: config.openaiApiKey });
-}
 
 /**
  * Prompt do sistema que instrui o LLM a estruturar a saída em JSON
@@ -47,11 +34,11 @@ Sua resposta DEVE ser um objeto JSON estrito com exatamente os seguintes campos:
   "explanation": "Breve explicação em português da estratégia usada (ex: por que o gancho foi feito assim)."
 }
 
-Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua resposta se você estiver no modo JSON. Retorne apenas o JSON puro.
+Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua resposta. Retorne apenas o JSON puro.
 `;
 
 /**
- * Gera os rascunhos de posts usando o Gemini (preferencial) ou OpenAI (fallback)
+ * Gera os rascunhos de posts usando Hugging Face Inference API
  * @param {string} rawInput Ideia bruta fornecida pelo usuário
  * @param {string[]} urls Array de URLs opcionais para incluir no final
  * @returns {Promise<{twitter: string, linkedin: string, explanation: string}>}
@@ -67,53 +54,74 @@ export async function generateSocialPosts(rawInput, urls = []) {
     ? `\n\nIMPORTANTE: No final de AMBOS os posts (Twitter e LinkedIn), adicione um quebra de linha e então as URLs fornecidas:\n${urls.map(url => `- ${url}`).join('\n')}`
     : '';
 
-  // 1. Tentar usar o Gemini
-  if (genAI) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-pro',
-        generationConfig: { responseMimeType: "application/json" }
-      });
+  const hfToken = config.huggingfaceToken;
 
-      const prompt = `
-      ${SYSTEM_PROMPT}${urlInstruction}
-
-      Ideia/Input do Usuário:
-      "${rawInput}"
-      `;
-
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
-      return JSON.parse(text);
-    } catch (geminiError) {
-      console.error('[LLM] Falha ao gerar com Gemini, tentando OpenAI como fallback...', geminiError);
-    }
+  if (!hfToken) {
+    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env');
   }
 
-  // 2. Fallback para OpenAI
-  if (openai) {
-    try {
-      const prompt = `
-      Ideia/Input do Usuário:
-      "${rawInput}"${urlInstruction}
-      `;
+  try {
+    const prompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: prompt }
-        ],
-        response_format: { type: "json_object" }
-      });
+    console.log('[LLM] Chamando Hugging Face Inference API (mistral-7b)...');
 
-      const text = response.choices[0].message.content;
-      return JSON.parse(text);
-    } catch (openaiError) {
-      console.error('[LLM] Falha ao gerar com OpenAI...', openaiError);
-      throw new Error('Nenhuma API de LLM disponível ou configurada corretamente para gerar textos.');
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1',
+      {
+        inputs: prompt,
+        parameters: {
+          max_new_tokens: 1500,
+          temperature: 0.7,
+          top_p: 0.95,
+          do_sample: true
+        }
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${hfToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60 segundos
+      }
+    );
+
+    // Extrair texto da resposta
+    let generatedText = response.data[0]?.generated_text || '';
+
+    // Remover o prompt do texto gerado (Mistral inclui o prompt na resposta)
+    if (generatedText.includes(prompt)) {
+      generatedText = generatedText.replace(prompt, '').trim();
     }
-  }
 
-  throw new Error('Chaves da API do Gemini ou OpenAI não configuradas. Configure-as no arquivo .env.');
+    console.log('[LLM] Parsing JSON da resposta...');
+
+    // Tentar extrair JSON da resposta
+    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Nenhum JSON encontrado na resposta do modelo');
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
+
+    // Validar que os campos obrigatórios existem
+    if (!result.twitter || !result.linkedin || !result.explanation) {
+      throw new Error('Resposta do modelo não contém os campos esperados (twitter, linkedin, explanation)');
+    }
+
+    console.log('[LLM] Geração concluída com sucesso!');
+    return result;
+
+  } catch (error) {
+    console.error('[LLM] Erro ao gerar com Hugging Face:', error.message);
+
+    if (error.response?.status === 503) {
+      throw new Error('Modelo do Hugging Face sobrecarregado. Tente novamente em alguns minutos.');
+    }
+
+    if (error.response?.status === 401) {
+      throw new Error('Chave do Hugging Face inválida ou expirada.');
+    }
+
+    throw new Error(`Falha na geração: ${error.message}`);
+  }
 }

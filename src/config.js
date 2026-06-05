@@ -7,8 +7,7 @@ dotenv.config();
 const config = {
   port: process.env.PORT || 3000,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
-  geminiApiKey: process.env.GEMINI_API_KEY,
-  openaiApiKey: process.env.OPENAI_API_KEY,
+  huggingfaceToken: process.env.HUGGINGFACE_API_KEY,
   linkedin: {
     accessToken: process.env.LINKEDIN_ACCESS_TOKEN,
     memberUrn: process.env.LINKEDIN_MEMBER_URN,
@@ -25,8 +24,7 @@ const config = {
 export function checkConfig() {
   const missing = [];
   if (!config.telegramBotToken) missing.push('TELEGRAM_BOT_TOKEN');
-  if (!config.geminiApiKey) missing.push('GEMINI_API_KEY');
-  if (!config.openaiApiKey) missing.push('OPENAI_API_KEY');
+  if (!config.huggingfaceToken) missing.push('HUGGINGFACE_API_KEY');
 
   const missingLinkedin = [];
   if (!config.linkedin.accessToken) missingLinkedin.push('LINKEDIN_ACCESS_TOKEN');
