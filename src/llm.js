@@ -66,15 +66,25 @@ export async function generateSocialPosts(rawInput, urls = []) {
   const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    console.log('[LLM] Chamando Hugging Face Inference API (Mistral-7B)...');
+    console.log('[LLM] Chamando Hugging Face Inference API (Llama-2-7B)...');
 
-    // Usar o cliente da biblioteca oficial do HF com conversational task
-    const response = await hf.conversational({
-      model: 'mistralai/Mistral-7B-Instruct-v0.2',
-      inputs: fullPrompt
+    // Usar o cliente da biblioteca oficial do HF
+    // Coletar stream de texto em string
+    let generatedText = '';
+
+    const stream = await hf.textGenerationStream({
+      model: 'meta-llama/Llama-2-7b-chat-hf',
+      inputs: fullPrompt,
+      parameters: {
+        max_new_tokens: 1500,
+        temperature: 0.7,
+        top_p: 0.95
+      }
     });
 
-    let generatedText = response.generated_text || '';
+    for await (const chunk of stream) {
+      generatedText += chunk.token.text;
+    }
 
     console.log('[LLM] Parsing JSON da resposta...');
 
