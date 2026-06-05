@@ -75,7 +75,7 @@ export async function generateSocialPosts(rawInput, urls = []) {
         }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 1500
+          maxOutputTokens: 4000
         }
       },
       {
@@ -91,26 +91,49 @@ export async function generateSocialPosts(rawInput, urls = []) {
 
     console.log('[LLM] Parsing JSON da resposta...');
 
-    // Tentar extrair JSON diretamente (com ou sem markdown)
-    // Primeiro tenta dentro de ```json ... ```
-    let jsonMatch = generatedText.match(/```json\s*\n?([\s\S]*?)\n?```/);
+    // Tentar extrair JSON com múltiplas estratégias
+    let jsonStr = null;
 
-    // Se não achar, tenta extrair JSON direto
-    if (!jsonMatch) {
-      jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-    } else {
-      // Se achou dentro dos backticks, usa o grupo capturado
-      jsonMatch = [jsonMatch[1]];
+    // Estratégia 1: Procurar dentro de ```json ... ```
+    let codeBlockMatch = generatedText.match(/```json\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch) {
+      jsonStr = codeBlockMatch[1];
     }
 
-    if (!jsonMatch) {
-      console.error('[LLM] Resposta raw COMPLETA:');
-      console.error(generatedText);
-      console.error('[LLM] ---FIM DA RESPOSTA---');
-      throw new Error('Nenhum JSON encontrado na resposta do modelo. Resposta logada acima.');
+    // Estratégia 2: Se não achou em code block, procura por { ... }
+    if (!jsonStr) {
+      let jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+      }
     }
 
-    const result = JSON.parse(jsonMatch[0]);
+    // Estratégia 3: Se ainda não achou, tenta começando do primeiro {
+    if (!jsonStr) {
+      const startIdx = generatedText.indexOf('{');
+      if (startIdx !== -1) {
+        jsonStr = generatedText.substring(startIdx);
+      }
+    }
+
+    if (!jsonStr) {
+      console.error('[LLM] ERRO: Nenhum JSON encontrado na resposta:');
+      console.error(generatedText.substring(0, 500));
+      throw new Error('Nenhum JSON encontrado na resposta do modelo');
+    }
+
+    let result;
+    try {
+      result = JSON.parse(jsonStr);
+    } catch (parseError) {
+      // Se falhou, tenta remover o último caractere (pode estar incompleto)
+      try {
+        result = JSON.parse(jsonStr.slice(0, -1) + '}');
+      } catch {
+        console.error('[LLM] Erro ao fazer parse do JSON:', jsonStr.substring(0, 200));
+        throw parseError;
+      }
+    }
 
     // Validar que os campos obrigatórios existem
     if (!result.twitter || !result.linkedin || !result.explanation) {
