@@ -71,7 +71,7 @@ export async function generateSocialPosts(rawInput, urls = []) {
   if (genAI) {
     try {
       const model = genAI.getGenerativeModel({
-        model: 'gemini-flash-latest',
+        model: 'gemini-1.5-flash',
         generationConfig: { responseMimeType: "application/json" }
       });
 
