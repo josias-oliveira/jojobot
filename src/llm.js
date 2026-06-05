@@ -22,7 +22,7 @@ Seu objetivo é pegar a ideia do usuário e gerar duas versões:
    - Nada de "uma verdade incômoda" ou "imagine se..."
 
 2. LINKEDIN (post escaneável, fácil de ler no celular):
-   - ABERTURA: uma cena curta de 1 a 2 linhas que prende. Frases curtas. Ex: "Domingo, 5h da manhã. O despertador toca."
+   - ABERTURA: comece pelo CONCRETO que o usuário trouxe — um fato, um número, uma cena específica, uma fala real. Ex: "Domingo, 5h da manhã. O despertador toca." JAMAIS abra com generalização vaga sobre setor/época ("A indústria de tecnologia vive uma transição", "O mercado está mudando", "Vivemos uma era de..."). Isso é a cara de IA nº 1 e o leitor pula na hora.
    - Pode abrir com 1 pergunta pra criar tensão e respondê-la logo em seguida. Ex: "Qual a necessidade real disso num dia de descanso? Nenhuma imediata."
    - ESTRUTURA QUE FUNCIONA BEM (use como esqueleto, adaptando ao conteúdo — vale tanto pra história pessoal quanto pra insight de negócio):
        1) Hook: a PERGUNTA CENTRAL do post vai AQUI, no começo (NUNCA guardada pro final), normalmente fato concreto ou cena + a pergunta afiada que o texto inteiro vai responder. Ex: "Seu time entregou 10 funcionalidades esse mês. Mas quanto faturamento isso gerou?"
@@ -42,17 +42,38 @@ Seu objetivo é pegar a ideia do usuário e gerar duas versões:
 
 REGRAS IMPORTANTES:
 - ORTOGRAFIA E REVISÃO: releia o texto antes de devolver. Português impecável, sem erros de digitação nem palavras que não existem (ex: é "hoje", NUNCA "hojes"). Acentos e concordância corretos.
-- NÃO use **negrito**, asteriscos ou markdown (o LinkedIn não renderiza e fica feio). Bullets com "•" são permitidos e recomendados.
+- PROIBIDO MARKDOWN. Nunca use asterisco (*): nada de **negrito** nem *itálico*. O LinkedIn e o X NÃO renderizam markdown, então "**Foco:**" aparece com os asteriscos visíveis e fica feio. Também não use #, _, nem qualquer marcação. Para destacar, use o rótulo seguido de dois-pontos (ex: "Foco na amplificação:") ou MAIÚSCULA pontual. Bullets só com "•".
 - NÃO use frases genéricas de IA (imagine, uma verdade incômoda, você sabia que, é hora de, revolução, transformação)
 - NÃO use a antítese simétrica "não é X, mas (sim) Y" / "não X, e sim Y" como muleta — esse contraste espelhado é assinatura de IA (ex RUIM: "não se importa com o esforço, mas com o valor"; "comportamento, não prazos"). No máximo 1 vez no post inteiro, e só se sair natural. Em geral, afirme direto o que importa.
 - NÃO anuncie revelação dramática antes da frase ("Mas a verdade é dura:", "a verdade incômoda é", "aqui está o segredo", "deixa eu te contar uma coisa"). Corta o tambor e vai direto ao ponto.
 - NÃO faça pergunta com falso binário arrumadinho ("é por A ou por B?", "qualidade ou velocidade?", "pelo volume ou pelo resultado?"). Se for perguntar, deixe aberta e genuína.
+- NÃO abra nem encha o texto com abstração grandiosa/profética: "A indústria vive uma transição", "um movimento silencioso, mas profundo", "estamos vivendo uma mudança", "algo está mudando", "e isso muda tudo". Nada de fragmento dramático nem par de adjetivo vago ("silencioso, mas profundo"). Toda frase tem que falar de algo concreto, específico e real do que o usuário trouxe — não generalize sobre o setor/o mundo/a época.
 - NÃO escreva em STACCATO (a maior cara de IA que existe): frases curtas espelhadas, paralelas, uma confirmando a outra. RUIM: "É a base que sustenta tudo. Quando você não tem saúde, nenhum dinheiro paga. É um ativo insubstituível." BOM: junte num parágrafo fluido, "A base de tudo é a saúde, e isso fica óbvio no dia em que ela falha: nenhum dinheiro do mundo recompra um ativo que não tem preço." Frase longa, com vírgula e oração no meio.
 - NÃO termine com a clássica pergunta de engajamento seguida de 👇 (a maior cara de IA em post de LinkedIn). A pergunta que guia o post vai no COMEÇO e é desenvolvida no meio; o final é um convite leve e opcional, em forma de afirmação e sem emoji.
 - NÃO encha linguiça: cada bloco precisa carregar uma ideia nova
 - NÃO termine parágrafos com muleta preguiçosa ("Enfim,", "No fim das contas,", "Resumindo,", "Então é isso", "No final do dia,"). Feche cada bloco com uma frase que tenha conteúdo próprio.
 - NÃO force motivação
 - Escreve como pessoa real, direto
+
+EXEMPLO DE OURO para o LinkedIn — imite o ESTILO, o ritmo e a estrutura, NUNCA o assunto (o tema vem do input do usuário). Repare: hook concreto com a pergunta logo no começo, zero abstração grandiosa, prosa que flui, bullets e lista numerada quando ajudam, frase-conceito no fim e convite leve e opcional (sem pergunta repetida, sem 👇, sem markdown):
+"""
+Seu time de produto entregou 10 funcionalidades este mês. Mas quanto faturamento isso gerou?
+
+A maioria das empresas cai na armadilha da "Fábrica de Funcionalidades": mede sucesso pelo tamanho do roadmap entregue, os tais Outputs. Só que o cliente mede outra coisa completamente — se o problema dele foi resolvido.
+
+A diferença na prática:
+• Output: entregar um dashboard novo de relatórios.
+• Outcome: o cliente passar a gastar 30% menos tempo analisando dados.
+
+Pra virar essa chave, o que funciona:
+1. Defina sucesso pelo comportamento que mudou no usuário, não pela data em que algo entrou no ar.
+2. Leve a engenharia pra discutir qual problema do cliente vocês estão resolvendo, antes de falar de código.
+3. Aprenda a dizer "não" pra demanda que não mexe em nenhum número de negócio.
+
+Empilhar entregas é fácil. Gerar resultado é o que separa um produto que lidera de um produto que ninguém lembra.
+
+Se você mede produto de um jeito diferente, me conta aqui ou na DM.
+"""
 
 Sua resposta é um JSON com:
 {
@@ -63,6 +84,25 @@ Sua resposta é um JSON com:
 
 Apenas JSON puro, sem markdown, sem backticks.
 `;
+
+/**
+ * Rede de segurança: remove qualquer marcação Markdown que o modelo tenha
+ * gerado por engano. O LinkedIn e o X não renderizam Markdown, então
+ * "**Foco:**" apareceria literalmente com os asteriscos. Garantimos aqui que
+ * isso nunca chega às redes, mesmo que o prompt seja desobedecido.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripMarkdownFormatting(text) {
+  if (!text) return text;
+  return text
+    .replace(/\*\*\*(.+?)\*\*\*/g, '$1') // ***negrito+itálico***
+    .replace(/\*\*(.+?)\*\*/g, '$1')     // **negrito**
+    .replace(/\*(.+?)\*/g, '$1')         // *itálico*
+    .replace(/\*/g, '')                   // qualquer asterisco solto restante
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')  // títulos markdown (# ...)
+    .trim();
+}
 
 /**
  * Gera os rascunhos de posts usando Google Gemini 2.5 Flash API
@@ -101,7 +141,7 @@ export async function generateSocialPosts(rawInput, urls = []) {
           }]
         }],
         generationConfig: {
-          temperature: 0.7,
+          temperature: 0.6,
           maxOutputTokens: 4000
         }
       },
@@ -166,6 +206,11 @@ export async function generateSocialPosts(rawInput, urls = []) {
     if (!result.twitter || !result.linkedin || !result.explanation) {
       throw new Error('Resposta do modelo não contém os campos esperados (twitter, linkedin, explanation)');
     }
+
+    // Rede de segurança: remove Markdown que o modelo possa ter gerado
+    // (LinkedIn/X mostram "**texto**" com os asteriscos literais)
+    result.twitter = stripMarkdownFormatting(result.twitter);
+    result.linkedin = stripMarkdownFormatting(result.linkedin);
 
     console.log('[LLM] Geração concluída com sucesso!');
     return result;
