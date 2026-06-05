@@ -38,7 +38,7 @@ Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua re
 `;
 
 /**
- * Gera os rascunhos de posts usando Together.ai API (gratuito e confiável)
+ * Gera os rascunhos de posts usando Google Gemini 2.5 Flash API
  * @param {string} rawInput Ideia bruta fornecida pelo usuário
  * @param {string[]} urls Array de URLs opcionais para incluir no final
  * @returns {Promise<{twitter: string, linkedin: string, explanation: string}>}
@@ -49,8 +49,10 @@ export async function generateSocialPosts(rawInput, urls = []) {
     console.log(`[LLM] URLs detectadas: ${urls.join(', ')}`);
   }
 
-  if (!config.huggingfaceToken) {
-    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env (usando como Together.ai API key)');
+  const geminiKey = config.geminiApiKey || process.env.GEMINI_API_KEY;
+
+  if (!geminiKey) {
+    throw new Error('GEMINI_API_KEY não está configurada no .env');
   }
 
   // Preparar instrução sobre URLs
@@ -61,29 +63,27 @@ export async function generateSocialPosts(rawInput, urls = []) {
   const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    console.log('[LLM] Chamando Together.ai API (Mistral-7B)...');
+    console.log('[LLM] Chamando Google Gemini 2.5 Flash API...');
 
     const response = await axios.post(
-      'https://api.together.xyz/inference',
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {
-        model: 'mistralai/Mistral-7B-Instruct-v0.1',
-        prompt: fullPrompt,
-        max_tokens: 1500,
-        temperature: 0.7,
-        top_p: 0.95,
-        top_k: 50,
-        repetition_penalty: 1.0
+        contents: [{
+          parts: [{
+            text: fullPrompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1500
+        }
       },
       {
-        headers: {
-          'Authorization': `Bearer ${config.huggingfaceToken}`,
-          'Content-Type': 'application/json'
-        },
         timeout: 90000
       }
     );
 
-    const generatedText = response.data?.output?.[0] || '';
+    const generatedText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
     if (!generatedText) {
       throw new Error('Resposta vazia da API');
@@ -91,8 +91,18 @@ export async function generateSocialPosts(rawInput, urls = []) {
 
     console.log('[LLM] Parsing JSON da resposta...');
 
-    // Tentar extrair JSON da resposta
-    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    // Tentar extrair JSON diretamente (com ou sem markdown)
+    // Primeiro tenta dentro de ```json ... ```
+    let jsonMatch = generatedText.match(/```json\s*\n?([\s\S]*?)\n?```/);
+
+    // Se não achar, tenta extrair JSON direto
+    if (!jsonMatch) {
+      jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    } else {
+      // Se achou dentro dos backticks, usa o grupo capturado
+      jsonMatch = [jsonMatch[1]];
+    }
+
     if (!jsonMatch) {
       console.error('[LLM] Resposta raw (primeiros 300 chars):', generatedText.substring(0, 300));
       throw new Error('Nenhum JSON encontrado na resposta do modelo');
@@ -111,12 +121,16 @@ export async function generateSocialPosts(rawInput, urls = []) {
   } catch (error) {
     console.error('[LLM] Erro ao gerar:', error.message);
 
-    if (error.response?.status === 401) {
-      throw new Error('Chave do Together.ai inválida. Configure HUGGINGFACE_API_KEY com sua chave do Together.ai');
+    if (error.response?.status === 401 || error.message.includes('API key')) {
+      throw new Error('Chave do Gemini inválida ou expirada. Verifique em https://aistudio.google.com/app/apikey');
+    }
+
+    if (error.response?.status === 429) {
+      throw new Error('Quota do Gemini excedida. Tente novamente em alguns minutos.');
     }
 
     if (error.response?.status === 503) {
-      throw new Error('Serviço do Together.ai temporariamente indisponível. Tente novamente em alguns minutos.');
+      throw new Error('Serviço do Gemini temporariamente indisponível. Tente novamente em alguns minutos.');
     }
 
     throw new Error(`Falha na geração: ${error.message}`);
