@@ -38,7 +38,7 @@ Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua re
 `;
 
 /**
- * Gera os rascunhos de posts usando Hugging Face Inference API via HTTP direto
+ * Gera os rascunhos de posts usando Together.ai API (gratuito e confiável)
  * @param {string} rawInput Ideia bruta fornecida pelo usuário
  * @param {string[]} urls Array de URLs opcionais para incluir no final
  * @returns {Promise<{twitter: string, linkedin: string, explanation: string}>}
@@ -50,7 +50,7 @@ export async function generateSocialPosts(rawInput, urls = []) {
   }
 
   if (!config.huggingfaceToken) {
-    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env');
+    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env (usando como Together.ai API key)');
   }
 
   // Preparar instrução sobre URLs
@@ -61,11 +61,19 @@ export async function generateSocialPosts(rawInput, urls = []) {
   const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    console.log('[LLM] Chamando Hugging Face Inference API via HTTP...');
+    console.log('[LLM] Chamando Together.ai API (Mistral-7B)...');
 
     const response = await axios.post(
-      'https://api-inference.huggingface.co/models/gpt2',
-      { inputs: fullPrompt },
+      'https://api.together.xyz/inference',
+      {
+        model: 'mistralai/Mistral-7B-Instruct-v0.1',
+        prompt: fullPrompt,
+        max_tokens: 1500,
+        temperature: 0.7,
+        top_p: 0.95,
+        top_k: 50,
+        repetition_penalty: 1.0
+      },
       {
         headers: {
           'Authorization': `Bearer ${config.huggingfaceToken}`,
@@ -75,26 +83,18 @@ export async function generateSocialPosts(rawInput, urls = []) {
       }
     );
 
-    let generatedText = '';
+    const generatedText = response.data?.output?.[0] || '';
 
-    // Extrair texto da resposta (gpt2 retorna array)
-    if (Array.isArray(response.data) && response.data[0]) {
-      generatedText = response.data[0].generated_text || '';
-    } else if (typeof response.data === 'string') {
-      generatedText = response.data;
-    }
-
-    // Remover o prompt do começo (gpt2 inclui o input)
-    if (generatedText.includes(fullPrompt)) {
-      generatedText = generatedText.replace(fullPrompt, '').trim();
+    if (!generatedText) {
+      throw new Error('Resposta vazia da API');
     }
 
     console.log('[LLM] Parsing JSON da resposta...');
-    console.log('[LLM] Resposta raw (primeiros 300 chars):', generatedText.substring(0, 300));
 
     // Tentar extrair JSON da resposta
     const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('[LLM] Resposta raw (primeiros 300 chars):', generatedText.substring(0, 300));
       throw new Error('Nenhum JSON encontrado na resposta do modelo');
     }
 
@@ -102,7 +102,7 @@ export async function generateSocialPosts(rawInput, urls = []) {
 
     // Validar que os campos obrigatórios existem
     if (!result.twitter || !result.linkedin || !result.explanation) {
-      throw new Error('Resposta do modelo não contém os campos esperados');
+      throw new Error('Resposta do modelo não contém os campos esperados (twitter, linkedin, explanation)');
     }
 
     console.log('[LLM] Geração concluída com sucesso!');
@@ -111,12 +111,12 @@ export async function generateSocialPosts(rawInput, urls = []) {
   } catch (error) {
     console.error('[LLM] Erro ao gerar:', error.message);
 
-    if (error.response?.status === 503) {
-      throw new Error('Serviço do Hugging Face temporariamente indisponível. Tente novamente em alguns minutos.');
+    if (error.response?.status === 401) {
+      throw new Error('Chave do Together.ai inválida. Configure HUGGINGFACE_API_KEY com sua chave do Together.ai');
     }
 
-    if (error.response?.status === 401) {
-      throw new Error('Chave do Hugging Face inválida ou expirada.');
+    if (error.response?.status === 503) {
+      throw new Error('Serviço do Together.ai temporariamente indisponível. Tente novamente em alguns minutos.');
     }
 
     throw new Error(`Falha na geração: ${error.message}`);
