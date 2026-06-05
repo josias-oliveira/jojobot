@@ -66,24 +66,20 @@ export async function generateSocialPosts(rawInput, urls = []) {
   const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    console.log('[LLM] Chamando Hugging Face Inference API (Llama-2-7B)...');
+    console.log('[LLM] Chamando Hugging Face Inference API (FLAN-T5-Large)...');
 
-    // Usar o cliente da biblioteca oficial do HF
-    // Coletar stream de texto em string
+    // Usar o cliente da biblioteca oficial do HF com textGenerationStream
     let generatedText = '';
 
     const stream = await hf.textGenerationStream({
-      model: 'meta-llama/Llama-2-7b-chat-hf',
-      inputs: fullPrompt,
-      parameters: {
-        max_new_tokens: 1500,
-        temperature: 0.7,
-        top_p: 0.95
-      }
+      model: 'google/flan-t5-large',
+      inputs: fullPrompt
     });
 
     for await (const chunk of stream) {
-      generatedText += chunk.token.text;
+      if (chunk.token && chunk.token.text) {
+        generatedText += chunk.token.text;
+      }
     }
 
     console.log('[LLM] Parsing JSON da resposta...');
