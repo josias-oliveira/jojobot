@@ -68,17 +68,10 @@ export async function generateSocialPosts(rawInput, urls = []) {
   try {
     console.log('[LLM] Chamando Hugging Face Inference API (Mistral-7B)...');
 
-    // Usar o cliente da biblioteca oficial do HF
-    const response = await hf.textGeneration({
+    // Usar o cliente da biblioteca oficial do HF com conversational task
+    const response = await hf.conversational({
       model: 'mistralai/Mistral-7B-Instruct-v0.2',
-      inputs: fullPrompt,
-      parameters: {
-        max_new_tokens: 1500,
-        temperature: 0.7,
-        top_p: 0.95,
-        do_sample: true,
-        return_full_text: false
-      }
+      inputs: fullPrompt
     });
 
     let generatedText = response.generated_text || '';
