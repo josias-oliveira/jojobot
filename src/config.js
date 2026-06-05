@@ -7,7 +7,7 @@ dotenv.config();
 const config = {
   port: process.env.PORT || 3000,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
-  huggingfaceToken: process.env.HUGGINGFACE_API_KEY,
+  huggingfaceToken: process.env.HUGGINGFACE_API_KEY, // Actually used for Gemini API key
   linkedin: {
     accessToken: process.env.LINKEDIN_ACCESS_TOKEN,
     memberUrn: process.env.LINKEDIN_MEMBER_URN,
