@@ -314,9 +314,12 @@ _${posts.explanation}_
     const action = data.substring(0, firstUnderscore);
     const draftId = data.substring(firstUnderscore + 1);
 
+    console.log('[Telegram Bot] Callback recebido:', { action, draftId, data });
+
     const draft = db.getDraft(draftId);
     if (!draft) {
-      bot.sendMessage(chatId, '❌ Rascunho não encontrado.');
+      console.log('[Telegram Bot] ❌ Draft não encontrado:', { draftId, allDrafts: Object.keys(db.data.drafts) });
+      bot.sendMessage(chatId, `❌ Rascunho não encontrado (ID: ${draftId}). Talvez tenha expirado. Tente gerar um novo.`);
       return;
     }
 
