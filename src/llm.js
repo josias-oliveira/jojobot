@@ -1,10 +1,5 @@
-import { HfInference } from '@huggingface/inference';
+import axios from 'axios';
 import config from './config.js';
-
-// Inicializar cliente do Hugging Face
-const hf = config.huggingfaceToken
-  ? new HfInference(config.huggingfaceToken)
-  : null;
 
 /**
  * Prompt do sistema que instrui o LLM a estruturar a saída em JSON
@@ -43,7 +38,7 @@ Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua re
 `;
 
 /**
- * Gera os rascunhos de posts usando Hugging Face Inference API
+ * Gera os rascunhos de posts usando Hugging Face Inference API via HTTP direto
  * @param {string} rawInput Ideia bruta fornecida pelo usuário
  * @param {string[]} urls Array de URLs opcionais para incluir no final
  * @returns {Promise<{twitter: string, linkedin: string, explanation: string}>}
@@ -54,7 +49,7 @@ export async function generateSocialPosts(rawInput, urls = []) {
     console.log(`[LLM] URLs detectadas: ${urls.join(', ')}`);
   }
 
-  if (!hf) {
+  if (!config.huggingfaceToken) {
     throw new Error('HUGGINGFACE_API_KEY não está configurada no .env');
   }
 
@@ -66,28 +61,40 @@ export async function generateSocialPosts(rawInput, urls = []) {
   const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    console.log('[LLM] Chamando Hugging Face Inference API (FLAN-T5-Large)...');
+    console.log('[LLM] Chamando Hugging Face Inference API via HTTP...');
 
-    // Usar o cliente da biblioteca oficial do HF com textGenerationStream
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/gpt2',
+      { inputs: fullPrompt },
+      {
+        headers: {
+          'Authorization': `Bearer ${config.huggingfaceToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 90000
+      }
+    );
+
     let generatedText = '';
 
-    const stream = await hf.textGenerationStream({
-      model: 'google/flan-t5-large',
-      inputs: fullPrompt
-    });
+    // Extrair texto da resposta (gpt2 retorna array)
+    if (Array.isArray(response.data) && response.data[0]) {
+      generatedText = response.data[0].generated_text || '';
+    } else if (typeof response.data === 'string') {
+      generatedText = response.data;
+    }
 
-    for await (const chunk of stream) {
-      if (chunk.token && chunk.token.text) {
-        generatedText += chunk.token.text;
-      }
+    // Remover o prompt do começo (gpt2 inclui o input)
+    if (generatedText.includes(fullPrompt)) {
+      generatedText = generatedText.replace(fullPrompt, '').trim();
     }
 
     console.log('[LLM] Parsing JSON da resposta...');
+    console.log('[LLM] Resposta raw (primeiros 300 chars):', generatedText.substring(0, 300));
 
     // Tentar extrair JSON da resposta
     const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('[LLM] Resposta raw:', generatedText.substring(0, 200));
       throw new Error('Nenhum JSON encontrado na resposta do modelo');
     }
 
@@ -95,20 +102,20 @@ export async function generateSocialPosts(rawInput, urls = []) {
 
     // Validar que os campos obrigatórios existem
     if (!result.twitter || !result.linkedin || !result.explanation) {
-      throw new Error('Resposta do modelo não contém os campos esperados (twitter, linkedin, explanation)');
+      throw new Error('Resposta do modelo não contém os campos esperados');
     }
 
     console.log('[LLM] Geração concluída com sucesso!');
     return result;
 
   } catch (error) {
-    console.error('[LLM] Erro ao gerar com Hugging Face:', error.message);
+    console.error('[LLM] Erro ao gerar:', error.message);
 
-    if (error.message.includes('overloaded')) {
-      throw new Error('Modelo do Hugging Face sobrecarregado. Tente novamente em alguns minutos.');
+    if (error.response?.status === 503) {
+      throw new Error('Serviço do Hugging Face temporariamente indisponível. Tente novamente em alguns minutos.');
     }
 
-    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+    if (error.response?.status === 401) {
       throw new Error('Chave do Hugging Face inválida ou expirada.');
     }
 
