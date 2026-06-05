@@ -1,5 +1,10 @@
-import axios from 'axios';
+import { HfInference } from '@huggingface/inference';
 import config from './config.js';
+
+// Inicializar cliente do Hugging Face
+const hf = config.huggingfaceToken
+  ? new HfInference(config.huggingfaceToken)
+  : null;
 
 /**
  * Prompt do sistema que instrui o LLM a estruturar a saída em JSON
@@ -49,55 +54,41 @@ export async function generateSocialPosts(rawInput, urls = []) {
     console.log(`[LLM] URLs detectadas: ${urls.join(', ')}`);
   }
 
+  if (!hf) {
+    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env');
+  }
+
   // Preparar instrução sobre URLs
   const urlInstruction = urls.length > 0
     ? `\n\nIMPORTANTE: No final de AMBOS os posts (Twitter e LinkedIn), adicione um quebra de linha e então as URLs fornecidas:\n${urls.map(url => `- ${url}`).join('\n')}`
     : '';
 
-  const hfToken = config.huggingfaceToken;
-
-  if (!hfToken) {
-    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env');
-  }
+  const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    const prompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
+    console.log('[LLM] Chamando Hugging Face Inference API (Mistral-7B)...');
 
-    console.log('[LLM] Chamando Hugging Face Inference API (mistral-7b)...');
-
-    const response = await axios.post(
-      'https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1',
-      {
-        inputs: prompt,
-        parameters: {
-          max_new_tokens: 1500,
-          temperature: 0.7,
-          top_p: 0.95,
-          do_sample: true
-        }
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${hfToken}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 60000 // 60 segundos
+    // Usar o cliente da biblioteca oficial do HF
+    const response = await hf.textGeneration({
+      model: 'mistralai/Mistral-7B-Instruct-v0.2',
+      inputs: fullPrompt,
+      parameters: {
+        max_new_tokens: 1500,
+        temperature: 0.7,
+        top_p: 0.95,
+        do_sample: true,
+        return_full_text: false
       }
-    );
+    });
 
-    // Extrair texto da resposta
-    let generatedText = response.data[0]?.generated_text || '';
-
-    // Remover o prompt do texto gerado (Mistral inclui o prompt na resposta)
-    if (generatedText.includes(prompt)) {
-      generatedText = generatedText.replace(prompt, '').trim();
-    }
+    let generatedText = response.generated_text || '';
 
     console.log('[LLM] Parsing JSON da resposta...');
 
     // Tentar extrair JSON da resposta
     const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+      console.error('[LLM] Resposta raw:', generatedText.substring(0, 200));
       throw new Error('Nenhum JSON encontrado na resposta do modelo');
     }
 
@@ -114,11 +105,11 @@ export async function generateSocialPosts(rawInput, urls = []) {
   } catch (error) {
     console.error('[LLM] Erro ao gerar com Hugging Face:', error.message);
 
-    if (error.response?.status === 503) {
+    if (error.message.includes('overloaded')) {
       throw new Error('Modelo do Hugging Face sobrecarregado. Tente novamente em alguns minutos.');
     }
 
-    if (error.response?.status === 401) {
+    if (error.message.includes('401') || error.message.includes('Unauthorized')) {
       throw new Error('Chave do Hugging Face inválida ou expirada.');
     }
 
