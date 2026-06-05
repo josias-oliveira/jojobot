@@ -104,8 +104,10 @@ export async function generateSocialPosts(rawInput, urls = []) {
     }
 
     if (!jsonMatch) {
-      console.error('[LLM] Resposta raw (primeiros 300 chars):', generatedText.substring(0, 300));
-      throw new Error('Nenhum JSON encontrado na resposta do modelo');
+      console.error('[LLM] Resposta raw COMPLETA:');
+      console.error(generatedText);
+      console.error('[LLM] ---FIM DA RESPOSTA---');
+      throw new Error('Nenhum JSON encontrado na resposta do modelo. Resposta logada acima.');
     }
 
     const result = JSON.parse(jsonMatch[0]);
