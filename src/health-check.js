@@ -19,7 +19,7 @@ async function validateGemini() {
     }
 
     const genAI = new GoogleGenerativeAI(config.geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
 
     // Fazer uma chamada mínima para testar
     const result = await model.generateContent('test');

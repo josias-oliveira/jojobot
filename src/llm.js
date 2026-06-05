@@ -1,10 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import axios from 'axios';
 import config from './config.js';
-
-// Inicializar cliente do Gemini
-const genAI = config.huggingfaceToken
-  ? new GoogleGenerativeAI(config.huggingfaceToken)
-  : null;
 
 /**
  * Prompt do sistema que instrui o LLM a estruturar a saída em JSON
@@ -43,7 +38,7 @@ Não inclua formatação markdown adicionais como \`\`\`json ou \`\`\` na sua re
 `;
 
 /**
- * Gera os rascunhos de posts usando Google Gemini API
+ * Gera os rascunhos de posts usando Together.ai API (gratuito e confiável)
  * @param {string} rawInput Ideia bruta fornecida pelo usuário
  * @param {string[]} urls Array de URLs opcionais para incluir no final
  * @returns {Promise<{twitter: string, linkedin: string, explanation: string}>}
@@ -54,8 +49,8 @@ export async function generateSocialPosts(rawInput, urls = []) {
     console.log(`[LLM] URLs detectadas: ${urls.join(', ')}`);
   }
 
-  if (!genAI) {
-    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env (usando como Gemini API key)');
+  if (!config.huggingfaceToken) {
+    throw new Error('HUGGINGFACE_API_KEY não está configurada no .env (usando como Together.ai API key)');
   }
 
   // Preparar instrução sobre URLs
@@ -66,17 +61,29 @@ export async function generateSocialPosts(rawInput, urls = []) {
   const fullPrompt = `${SYSTEM_PROMPT}${urlInstruction}\n\nIdeia/Input do Usuário:\n"${rawInput}"`;
 
   try {
-    console.log('[LLM] Chamando Google Gemini 2.0 Flash...');
+    console.log('[LLM] Chamando Together.ai API (Mistral-7B)...');
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      generationConfig: {
-        responseMimeType: 'application/json'
+    const response = await axios.post(
+      'https://api.together.xyz/inference',
+      {
+        model: 'mistralai/Mistral-7B-Instruct-v0.1',
+        prompt: fullPrompt,
+        max_tokens: 1500,
+        temperature: 0.7,
+        top_p: 0.95,
+        top_k: 50,
+        repetition_penalty: 1.0
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${config.huggingfaceToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 90000
       }
-    });
+    );
 
-    const result = await model.generateContent(fullPrompt);
-    const generatedText = result.response.text();
+    const generatedText = response.data?.output?.[0] || '';
 
     if (!generatedText) {
       throw new Error('Resposta vazia da API');
@@ -84,30 +91,32 @@ export async function generateSocialPosts(rawInput, urls = []) {
 
     console.log('[LLM] Parsing JSON da resposta...');
 
-    // Tentar fazer parse direto (Gemini retorna JSON puro em modo JSON)
-    const jsonResult = JSON.parse(generatedText);
+    // Tentar extrair JSON da resposta
+    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[LLM] Resposta raw (primeiros 300 chars):', generatedText.substring(0, 300));
+      throw new Error('Nenhum JSON encontrado na resposta do modelo');
+    }
+
+    const result = JSON.parse(jsonMatch[0]);
 
     // Validar que os campos obrigatórios existem
-    if (!jsonResult.twitter || !jsonResult.linkedin || !jsonResult.explanation) {
+    if (!result.twitter || !result.linkedin || !result.explanation) {
       throw new Error('Resposta do modelo não contém os campos esperados (twitter, linkedin, explanation)');
     }
 
     console.log('[LLM] Geração concluída com sucesso!');
-    return jsonResult;
+    return result;
 
   } catch (error) {
     console.error('[LLM] Erro ao gerar:', error.message);
 
-    if (error.message.includes('429') || error.message.includes('quota')) {
-      throw new Error('Quota do Gemini excedida. Tente novamente mais tarde ou adicione billing à sua conta Google.');
+    if (error.response?.status === 401) {
+      throw new Error('Chave do Together.ai inválida. Configure HUGGINGFACE_API_KEY com sua chave do Together.ai');
     }
 
-    if (error.message.includes('401') || error.message.includes('API key')) {
-      throw new Error('Chave do Gemini inválida ou expirada. Configure uma nova chave em HUGGINGFACE_API_KEY.');
-    }
-
-    if (error.message.includes('503') || error.message.includes('unavailable')) {
-      throw new Error('Serviço do Gemini temporariamente indisponível. Tente novamente em alguns minutos.');
+    if (error.response?.status === 503) {
+      throw new Error('Serviço do Together.ai temporariamente indisponível. Tente novamente em alguns minutos.');
     }
 
     throw new Error(`Falha na geração: ${error.message}`);
