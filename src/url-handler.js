@@ -5,8 +5,9 @@
 
 /**
  * Padrão para detectar URLs
+ * Excludes common trailing punctuation: . , ; : ! ? ) etc.
  */
-const URL_REGEX = /(https?:\/\/[^\s]+)/g;
+const URL_REGEX = /(https?:\/\/[^\s).,;:!?]+)/g;
 
 /**
  * Extrair URLs do texto

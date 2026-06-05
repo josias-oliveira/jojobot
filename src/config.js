@@ -7,7 +7,12 @@ dotenv.config();
 const config = {
   port: process.env.PORT || 3000,
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN,
-  huggingfaceToken: process.env.HUGGINGFACE_API_KEY, // Actually used for Gemini API key
+  // Gemini API key (prioritize GEMINI_API_KEY, fallback to HUGGINGFACE_API_KEY for backwards compatibility)
+  geminiApiKey: process.env.GEMINI_API_KEY || process.env.HUGGINGFACE_API_KEY,
+  // Also expose as huggingfaceToken for backwards compatibility with llm.js
+  huggingfaceToken: process.env.GEMINI_API_KEY || process.env.HUGGINGFACE_API_KEY,
+  // OpenAI API key for DALLE image generation
+  openaiApiKey: process.env.OPENAI_API_KEY,
   linkedin: {
     accessToken: process.env.LINKEDIN_ACCESS_TOKEN,
     memberUrn: process.env.LINKEDIN_MEMBER_URN,
@@ -24,7 +29,7 @@ const config = {
 export function checkConfig() {
   const missing = [];
   if (!config.telegramBotToken) missing.push('TELEGRAM_BOT_TOKEN');
-  if (!config.huggingfaceToken) missing.push('HUGGINGFACE_API_KEY');
+  if (!config.geminiApiKey) missing.push('GEMINI_API_KEY');
 
   const missingLinkedin = [];
   if (!config.linkedin.accessToken) missingLinkedin.push('LINKEDIN_ACCESS_TOKEN');

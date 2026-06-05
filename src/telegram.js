@@ -49,6 +49,24 @@ export function initTelegramBot() {
   bot = new TelegramBot(config.telegramBotToken, { polling: true });
   console.log('[Telegram] Bot inicializado e escutando mensagens (texto e imagem)...');
 
+  // ✅ Limpeza periódica do Map de rate limits (remover entradas inativas)
+  setInterval(() => {
+    const now = Date.now();
+    let cleanedCount = 0;
+    for (const [chatId, timestamps] of RATE_LIMITS.entries()) {
+      const activeTimestamps = timestamps.filter(ts => now - ts < 60000);
+      if (activeTimestamps.length === 0) {
+        RATE_LIMITS.delete(chatId);
+        cleanedCount++;
+      } else {
+        RATE_LIMITS.set(chatId, activeTimestamps);
+      }
+    }
+    if (cleanedCount > 0) {
+      safeLog('Telegram', 'debug', `Limpeza de rate limits: ${cleanedCount} entradas removidas`);
+    }
+  }, 30000); // Executar a cada 30 segundos
+
   // Evento de erros de polling
   bot.on('polling_error', (error) => {
     console.error('[Telegram] Erro no Polling:', error.message);

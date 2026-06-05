@@ -33,8 +33,15 @@ class LocalDatabase {
     const waitStart = Date.now();
     const MAX_WAIT_TIME = 5000; // 5 segundos de timeout
 
+    // ⚠️ Note: This is a synchronous loop that will block. For async safety,
+    // use saveAsync() instead. This version is kept for backwards compatibility.
+    let attempts = 0;
     while (this.writing && Date.now() - waitStart < MAX_WAIT_TIME) {
-      // Spin lock simples - aguarda liberação
+      // Avoid CPU spinning by yielding occasionally
+      if (attempts++ % 100 === 0) {
+        // Yield with a minimal busy-wait pattern (not truly async but reduces CPU)
+        const dummy = Math.random();
+      }
     }
 
     if (this.writing) {

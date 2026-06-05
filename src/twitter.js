@@ -50,13 +50,13 @@ export function shareOnTwitter(text, imagePath = null) {
     let pythonCmd = 'python3';
     const venvPythonPath = path.resolve('venv/bin/python');
     const venvPython3Path = path.resolve('venv/bin/python3');
-    
+
     if (fs.existsSync(venvPythonPath)) {
       pythonCmd = venvPythonPath;
-      console.log(`[Twitter Module] Usando Python do ambiente virtual (venv): ${pythonCmd}`);
+      safeLog('Twitter', 'info', `Usando Python do ambiente virtual (venv): ${pythonCmd}`);
     } else if (fs.existsSync(venvPython3Path)) {
       pythonCmd = venvPython3Path;
-      console.log(`[Twitter Module] Usando Python3 do ambiente virtual (venv): ${pythonCmd}`);
+      safeLog('Twitter', 'info', `Usando Python3 do ambiente virtual (venv): ${pythonCmd}`);
     }
 
     let pyProcess = runPythonProcess(pythonCmd, scriptPath, args);
@@ -64,7 +64,7 @@ export function shareOnTwitter(text, imagePath = null) {
     pyProcess.on('error', (err) => {
       // Se tentou venv e falhou por algum motivo de spawn, ou se era o global python3 que não existia
       if (err.code === 'ENOENT' && pythonCmd !== 'python') {
-        console.warn(`[Twitter Module] Comando falhou. Tentando com 'python' como fallback global...`);
+        safeLog('Twitter', 'warn', `Comando falhou. Tentando com 'python' como fallback global...`);
         pythonCmd = 'python';
         const fallbackProcess = runPythonProcess(pythonCmd, scriptPath, args);
         handleProcessEvents(fallbackProcess, resolve, reject);
